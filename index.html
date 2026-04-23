@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AmbuLink+ | Emergency Response</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="particles" id="particles"></div>
+    <div class="app-container">
+        <!-- SOS SCREEN -->
+        <div id="sos-screen" class="sos-section">
+            <h1 class="mb-2">AmbuLink+</h1>
+            <p class="mb-8 text-center" style="color: var(--text-muted);">Instant Emergency Support at Your Fingertips</p>
+            
+            <div class="sos-btn-wrapper">
+                <button class="sos-btn" id="sos-btn">
+                    SOS
+                    <span>Tap for Ambulance</span>
+                </button>
+            </div>
+
+            <p id="location-status" class="mt-4 text-center" style="font-size: 0.9rem; min-height: 1.2rem;"></p>
+
+            <div style="margin-top: 40px;">
+                <a href="login.html" class="btn btn-secondary" style="width: auto;">
+                    Staff Login
+                </a>
+            </div>
+        </div>
+
+        <!-- EMERGENCY FORM -->
+        <div class="card hidden" id="form-screen">
+            <h2 class="mb-8">Emergency Details</h2>
+            <form id="emergency-form">
+                <div class="form-group">
+                    <label>What is the emergency?</label>
+                    <select id="emergency-type" required>
+                        <option value="">Select Type</option>
+                        <option value="Accident">Road Accident</option>
+                        <option value="Cardiac">Heart Attack / Chest Pain</option>
+                        <option value="Respiratory">Breathing Problem</option>
+                        <option value="Maternal">Pregnancy Emergency</option>
+                        <option value="Stroke">Stroke / Seizure</option>
+                        <option value="Other">Other Emergency</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Severity Level</label>
+                    <select id="severity" required>
+                        <option value="Critical">Critical (Immediate Help)</option>
+                        <option value="Moderate">Moderate (Urgent)</option>
+                        <option value="Minor">Minor (Stable)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Primary Symptoms</label>
+                    <div class="checkbox-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="symptoms" value="Bleeding" style="width: auto;"> Bleeding
+                        </label>
+                        <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="symptoms" value="Unconscious" style="width: auto;"> Unconscious
+                        </label>
+                        <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="symptoms" value="Chest Pain" style="width: auto;"> Chest Pain
+                        </label>
+                        <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="symptoms" value="Breathing Issue" style="width: auto;"> Breathing
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Additional Notes</label>
+                    <textarea id="notes" rows="3" placeholder="Any specific location details or medical history..."></textarea>
+                </div>
+
+                <div style="display: flex; gap: 16px;">
+                    <button type="submit" class="btn btn-primary">Request Now</button>
+                    <button type="button" class="btn btn-secondary" id="skip-btn">Skip Details</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- STATUS / TRACKING SCREEN -->
+        <div class="hidden" id="status-screen">
+            <div class="card tracking-card">
+                <div class="tracking-header text-center">
+                    <h2 id="status-title">Request Initiated</h2>
+                    <div class="badge badge-pending mb-4" id="request-status-badge" style="margin-top: 12px;">
+                        Finding Nearest Ambulance...
+                    </div>
+                </div>
+
+                <div class="eta-display">
+                    <div class="eta-time" id="eta-text">--</div>
+                    <div class="eta-label">Estimated Arrival Time</div>
+                </div>
+
+                <div class="map-placeholder" id="tracking-map">
+                    <p>Live Tracking Map Loading...</p>
+                </div>
+
+                <div style="padding: 24px;">
+                    <div id="ambulance-info" class="text-center" style="font-size: 0.95rem; line-height: 1.6;">
+                        Stay calm. Help is on the way.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ✅ Firebase SDKs (v10 Modular for future-proofing) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAePTVnKSUw9owUVamA6bk6MVrYSBhKxEU",
+            authDomain: "ambulink-dd25f.firebaseapp.com",
+            databaseURL: "https://ambulink-dd25f-default-rtdb.firebaseio.com",
+            projectId: "ambulink-dd25f",
+            storageBucket: "ambulink-dd25f.firebasestorage.app",
+            messagingSenderId: "331876122317",
+            appId: "1:331876122317:web:09536ee69465c04b743384"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // ✅ Global variables for map tracking
+        window.currentLat = null;
+        window.currentLng = null;
+
+        // ✅ Strict Click Handler for Map Button
+        document.addEventListener("click", function(e) { 
+            if (e.target && e.target.id === "openMapBtn") { 
+                console.log("Button clicked"); 
+                
+                const lat = window.currentLat; 
+                const lng = window.currentLng; 
+                
+                console.log("Lat:", lat, "Lng:", lng); 
+                
+                if (lat && lng) { 
+                    const url = `https://www.google.com/maps?q=${lat},${lng}`; 
+                    window.open(url, "_blank"); 
+                } else { 
+                    alert("Location not available yet"); 
+                } 
+            } 
+        });
+
+        // ✅ Modular Tracking Listener for Patient
+        window.listenForAmbulanceTracking = (requestId) => {
+            const ambulanceRef = ref(db, `requests/${requestId}/ambulanceLocation`);
+            onValue(ambulanceRef, (snapshot) => {
+                const loc = snapshot.val();
+                if (loc && loc.latitude && loc.longitude) {
+                    // Update global coordinates (Fixed field names)
+                    window.currentLat = loc.latitude;
+                    window.currentLng = loc.longitude;
+                    
+                    console.log("Patient received Ambulance Location:", loc);
+                    const mapContainer = document.getElementById('tracking-map');
+                    if (mapContainer) {
+                        mapContainer.innerHTML = `
+                            <div class="text-center">
+                                <p style="color:var(--accent); font-weight:600; margin-bottom:10px;">
+                                    🚑 Ambulance is moving...
+                                </p>
+                                <p style="font-size:0.8rem; color:var(--text-muted);">
+                                    Lat: ${loc.latitude.toFixed(4)} | Lng: ${loc.longitude.toFixed(4)}
+                                </p>
+                                <button id="openMapBtn" class="btn btn-secondary mt-4" style="width:auto; font-size:0.8rem; padding: 10px 20px; position: relative; z-index: 9999;">
+                                    📍 Open Live Map
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            });
+        };
+    </script>
+
+    <!-- Legacy support for script.js (v8) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

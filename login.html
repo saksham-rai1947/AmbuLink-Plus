@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AmbuLink+ | Staff Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body style="display: flex; align-items: center; justify-content: center;">
+    <div class="app-container" style="max-width: 450px;">
+        <div class="card">
+            <div class="text-center mb-8">
+                <h1 style="font-size: 1.8rem; margin-bottom: 8px;" id="auth-title">Staff Portal</h1>
+                <p style="color: var(--text-muted); font-size: 0.9rem;" id="auth-subtitle">Secure access for responders & hospitals</p>
+            </div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="email" placeholder="staff@ambulink.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+
+                <div class="form-group hidden" id="role-group">
+                    <label>Select Your Role</label>
+                    <select id="role">
+                        <option value="driver">Ambulance Driver</option>
+                        <option value="hospital">Hospital Staff</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary mb-4" id="submit-btn">Login to Dashboard</button>
+                <button type="button" class="btn btn-secondary mb-4" id="toggle-auth">New here? Create Account</button>
+                <a href="index.html" class="btn btn-secondary">Return to SOS</a>
+            </form>
+
+            <div id="login-error" class="hidden text-center" style="color: var(--primary); font-size: 0.85rem; margin-top: 16px; background: rgba(230, 57, 70, 0.1); padding: 10px; border-radius: var(--radius-sm); border: 1px solid rgba(230, 57, 70, 0.2);">
+                Error message here.
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ✅ Firebase v10 Modular SDK Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        // Firebase Configuration (Same as your firebase-config.js)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAePTVnKSUw9owUVamA6bk6MVrYSBhKxEU",
+            authDomain: "ambulink-dd25f.firebaseapp.com",
+            databaseURL: "https://ambulink-dd25f-default-rtdb.firebaseio.com",
+            projectId: "ambulink-dd25f",
+            storageBucket: "ambulink-dd25f.firebasestorage.app",
+            messagingSenderId: "331876122317",
+            appId: "1:331876122317:web:09536ee69465c04b743384"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        const loginForm = document.getElementById('login-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const toggleAuthBtn = document.getElementById('toggle-auth');
+        const roleGroup = document.getElementById('role-group');
+        const authTitle = document.getElementById('auth-title');
+        const authSubtitle = document.getElementById('auth-subtitle');
+        const errorMsg = document.getElementById('login-error');
+
+        let isLoginMode = true;
+
+        // Persistent Login Check
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                redirectBasedOnRole(user.uid);
+            }
+        });
+
+        toggleAuthBtn.addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            authTitle.innerText = isLoginMode ? 'Staff Portal' : 'Create Account';
+            authSubtitle.innerText = isLoginMode ? 'Secure access for responders & hospitals' : 'Register your medical unit';
+            submitBtn.innerText = isLoginMode ? 'Login to Dashboard' : 'Register Unit';
+            toggleAuthBtn.innerText = isLoginMode ? 'New here? Create Account' : 'Back to Login';
+            roleGroup.classList.toggle('hidden', isLoginMode);
+            errorMsg.classList.add('hidden');
+        });
+
+        loginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            const role = document.getElementById('role').value;
+            
+            errorMsg.classList.add('hidden');
+            submitBtn.innerText = isLoginMode ? 'Logging in...' : 'Creating account...';
+            submitBtn.disabled = true;
+
+            try {
+                if (isLoginMode) {
+                    // 🔑 Login Function
+                    console.log("Attempting login for:", email);
+                    await signInWithEmailAndPassword(auth, email, pass);
+                    console.log("Auth success, checking role...");
+                } else {
+                    // 📝 Signup Function
+                    console.log("Creating user:", email);
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                    const user = userCredential.user;
+
+                    // 💾 Store User Role in Realtime Database (Fixed Path)
+                    console.log("Auth success. Saving role:", role, "for UID:", user.uid);
+                    await set(ref(db, 'users/' + user.uid), {
+                        email: email,
+                        role: role,
+                        createdAt: new Date().toISOString()
+                    });
+                    
+                    console.log("Database role saved successfully!");
+                    // The onAuthStateChanged listener will now trigger redirectBasedOnRole
+                }
+            } catch (err) {
+                console.error("Auth Error:", err.code, err.message);
+                errorMsg.innerText = err.message;
+                errorMsg.classList.remove('hidden');
+                submitBtn.innerText = isLoginMode ? 'Login to Dashboard' : 'Register Unit';
+                submitBtn.disabled = false;
+            }
+        });
+
+        // 🚀 Role-Based Redirect
+        async function redirectBasedOnRole(uid) {
+            try {
+                console.log("Fetching role for UID:", uid);
+                const roleRef = ref(db, `users/${uid}/role`);
+                const snapshot = await get(roleRef);
+                
+                if (snapshot.exists()) {
+                    const role = snapshot.val();
+                    console.log("Role found:", role);
+                    
+                    if (role === 'driver') {
+                        window.location.href = 'ambulance.html';
+                    } else if (role === 'hospital') {
+                        window.location.href = 'hospital.html';
+                    } else {
+                        throw new Error("Invalid role type.");
+                    }
+                } else {
+                    console.error("No role entry in database for this UID.");
+                    errorMsg.innerText = "Error: Role not found. Please register again.";
+                    errorMsg.classList.remove('hidden');
+                    submitBtn.disabled = false;
+                    await signOut(auth);
+                }
+            } catch (err) {
+                console.error("Redirect Logic Error:", err);
+                errorMsg.innerText = "Database Error: " + err.message;
+                errorMsg.classList.remove('hidden');
+                submitBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
